@@ -1,4 +1,4 @@
 nics-core-processor
 ===================
 
-NICS processors
+NICS Core Processors
