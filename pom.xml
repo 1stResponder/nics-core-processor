@@ -52,6 +52,7 @@
 
 	<!-- Listing all the sub-components of the NICS codebase -->
 	<modules>
+		<module>email-consumer</module>
 		<module>collab-feed-manager</module>
 		<module>geodatafeed-consumer</module>
 		<module>json-pli-consumer</module>
@@ -64,6 +65,7 @@
 		These are used to specify things like dependency and plugin versions, configuration 
 		values that should be quickly configurable, etc. -->
 	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- External dependency versions -->
 		<camel.version>2.14.3</camel.version>
 		<commons-cli.version>1.2</commons-cli.version>
@@ -79,7 +81,6 @@
 		<esapi.version>2.1.0</esapi.version>
 		<ejb.version>3.0</ejb.version>
 		<cxf.version>2.6.1</cxf.version>
-		<db4o.version>8.1-SNAPSHOT</db4o.version>
 		<geoserver-manager.version>1.3.0</geoserver-manager.version>
 		<geotools.version>10.2</geotools.version>
 		<hsqldb.version>2.3.0</hsqldb.version>
@@ -154,11 +155,6 @@
 	<dependencyManagement>
 		<dependencies>
 			<!-- External dependencies -->
-			<dependency>
-				<groupId>com.db4o</groupId>
-				<artifactId>db4o-full-java5</artifactId>
-				<version>${db4o.version}</version>
-			</dependency>
 			<dependency>
 				<groupId>com.rabbitmq</groupId>
 				<artifactId>amqp-client</artifactId>
@@ -534,23 +530,8 @@
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
-				<groupId>edu.mit.ll.hps.phinics.dbaccess</groupId>
-				<artifactId>phinics-orm</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>geoserver-rest-api</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>edu.mit.ll.nics.monitoring</groupId>
-				<artifactId>mach-agent</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>edu.mit.ll.nics.monitoring</groupId>
-				<artifactId>mach-messages</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
