@@ -51,7 +51,10 @@
 	<!-- EmailConsumerSpring bean configuration --> 
 	<bean id="emailConsumer" class="edu.mit.ll.nics.processor.email.EmailConsumerSpring"
 		init-method="init">
-		<property name="mailUrl" value="${mailUrl}" />
+		<property name="smtpHost" value="${mail.smtp.host}" />
+		<property name="smtpPort" value="${mail.smtp.port}" />
+		<property name="mailUsername" value="${mail.username}" />
+		<property name="mailPassword" value="${mail.password}" />
 		<property name="log4jPropertyFile" value="${log4jPropertyFile}" />
 	</bean>	
 
@@ -66,11 +69,11 @@
 			
      		<!-- MACH filtering -->
             <when>
-                    <simple>${bodyAs(String)} contains 'HEARTBEAT' and ${bodyAs(String)} contains '${properties:mach.nodeAndName}'</simple>
+                    <simple>${bodyAs(String)} contains 'HEARTBEAT' and ${bodyAs(String)} contains '${properties:nodeAndName}'</simple>
                     <transform>
-                    	<simple>${properties:mach.nodeAndName}</simple>
+                    	<simple>${properties:nodeAndName}</simple>
                     </transform>
-                    <to uri="{{mach.destination}}" />
+                    <to uri="{{mach}}" />
                     <stop/>
             </when>
 			<!-- END MACH filtering -->

@@ -30,9 +30,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -->
-<!-- (c) Copyright, 2008-2014 Massachusetts Institute of Technology. This 
-	material may be reproduced by or for the U.S. Government pursuant to the 
-	copyright license under the clause at DFARS 252.227-7013 (June, 1995). -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
@@ -43,7 +40,7 @@
 	<parent>
 		<groupId>edu.mit.ll.nics.processor</groupId>
 		<artifactId>master-pom</artifactId>
-		<version>6.1</version>
+		<version>6.1.1</version>
 		<relativePath>..</relativePath>
 	</parent>
 
@@ -64,45 +61,56 @@
 					<includePluginDependencies>false</includePluginDependencies>
 				</configuration>
 			</plugin>
-
+			
 			<!-- This produces a monolithic runnable jar with no external dependencies 
-				<plugin> <groupId>org.apache.maven.plugins</groupId> <artifactId>maven-assembly-plugin</artifactId> 
-				<configuration> <descriptorRefs> <descriptorRef>jar-with-dependencies</descriptorRef> 
-				</descriptorRefs> <archive> <manifest> <mainClass>edu.mit.ll.nics.processor.email.EmailConsumer</mainClass> 
-				</manifest> </archive> </configuration> </plugin> -->
-
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-dependency-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>copy-dependencies</id>
-						<phase>package</phase>
-						<goals>
-							<goal>copy-dependencies</goal>
-						</goals>
-						<configuration>
-							<excludeScope>test</excludeScope>
-							<excludeScope>provided</excludeScope>
-							<outputDirectory>${project.build.directory}/dependencies</outputDirectory>
-							<overWriteReleases>false</overWriteReleases>
-							<overWriteSnapshots>false</overWriteSnapshots>
-							<overWriteIfNewer>true</overWriteIfNewer>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- Tars up the component for deployment, and use with component manager -->
-			<plugin>
-				<!-- This produces a tar of all the files in this project -->
+			<plugin>				
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-assembly-plugin</artifactId>
 				<configuration>
 					<descriptorRefs>
-						<descriptorRef>spring-deploy-assembly</descriptorRef>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
 					</descriptorRefs>
+					<archive>
+						<manifest>
+							<mainClass>edu.mit.ll.nics.processor.email.EmailConsumer</mainClass>
+						</manifest>
+					</archive>
 				</configuration>
+			</plugin>
+			-->
+			
+			<plugin>
+			    <groupId>org.apache.maven.plugins</groupId>
+			    <artifactId>maven-dependency-plugin</artifactId>
+			    <executions>
+			        <execution>
+			            <id>copy-dependencies</id>
+			            <phase>package</phase>
+			            <goals>
+			               <goal>copy-dependencies</goal>
+			            </goals>
+			            <configuration>
+			                <excludeScope>test</excludeScope>
+			                <excludeScope>provided</excludeScope>
+			                <outputDirectory>${project.build.directory}/dependencies</outputDirectory>
+			                <overWriteReleases>false</overWriteReleases>
+			                <overWriteSnapshots>false</overWriteSnapshots>
+			                <overWriteIfNewer>true</overWriteIfNewer>
+			            </configuration>
+			        </execution>
+			    </executions>
+			</plugin>
+
+			<!-- Tars up the component for deployment, and use with component manager -->
+			<plugin>
+			     <!-- This produces a tar of all the files in this project -->
+			     <groupId>org.apache.maven.plugins</groupId>
+			     <artifactId>maven-assembly-plugin</artifactId>
+			     <configuration>
+			         <descriptorRefs>
+			             <descriptorRef>spring-deploy-assembly</descriptorRef>
+			         </descriptorRefs>
+			     </configuration>                 
 			</plugin>
 		</plugins>
 	</build>
@@ -116,16 +124,20 @@
 			<artifactId>camel-core</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.camel</groupId>
-			<artifactId>camel-spring</artifactId>
-		</dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-spring</artifactId>
+        </dependency>
 		<dependency>
 			<groupId>org.apache.camel</groupId>
 			<artifactId>camel-rabbitmq</artifactId>
 		</dependency>
 		<dependency>
-			<artifactId>org.apache.servicemix.bundles.javax.mail</artifactId>
-			<groupId>org.apache.servicemix.bundles</groupId>
+			<groupId>com.sun.mail</groupId>
+			<artifactId>javax.mail</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.json</groupId>
+			<artifactId>json</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.slf4j</groupId>
@@ -136,6 +148,7 @@
 			<artifactId>slf4j-log4j12</artifactId>
 		</dependency>
 
+		<!-- MITLL dependencies -->
 		<!-- NICS internal module dependencies -->
 		<dependency>
 			<groupId>edu.mit.ll.nics.common</groupId>

@@ -38,7 +38,7 @@
 	<!-- Maven artifact details -->
 	<groupId>edu.mit.ll.nics.processor</groupId>
 	<artifactId>master-pom</artifactId>
-	<version>6.1</version>
+	<version>6.1.1</version>
 	<packaging>pom</packaging>
 
 	<!-- Project information -->
@@ -52,12 +52,12 @@
 
 	<!-- Listing all the sub-components of the NICS codebase -->
 	<modules>
-		<module>email-consumer</module>
 		<module>collab-feed-manager</module>
 		<module>geodatafeed-consumer</module>
 		<module>json-pli-consumer</module>
 		<module>gst2gml</module>
 		<module>spring-runner</module>
+                <module>email-consumer</module>
 		<module>component-manager-archive-builder</module>
 	</modules>
 
@@ -119,6 +119,7 @@
 		<xalan.version>2.7.1</xalan.version>
 		<xerces.version>2.9.1</xerces.version>
 		<xml-apis.version>1.4.01</xml-apis.version>
+                <java-mail.version>1.5.5</java-mail.version>
 
 		<!-- External plugin versions -->
 		<assembly.plugin.version>2.3</assembly.plugin.version>
@@ -584,6 +585,16 @@
 				<groupId>org.owasp.esapi</groupId>
 				<artifactId>esapi</artifactId>
 				<version>${esapi.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.sun.mail</groupId>
+				<artifactId>javax.mail</artifactId>
+				<version>${java-mail.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>javax.mail</groupId>
+				<artifactId>javax.mail-api</artifactId>
+				<version>${java-mail.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

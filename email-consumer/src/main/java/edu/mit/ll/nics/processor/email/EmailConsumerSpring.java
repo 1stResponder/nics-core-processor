@@ -39,18 +39,20 @@ import java.util.regex.Pattern;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.Session;
-import javax.mail.Transport;
+import javax.mail.*;
 import javax.mail.internet.*;
 import javax.mail.util.ByteArrayDataSource;
 import javax.imageio.*;
 import javax.activation.*;
 import javax.xml.bind.*;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONArray;
+
 import edu.mit.ll.nics.common.email.*;
+import edu.mit.ll.nics.common.email.constants.*;
+import edu.mit.ll.nics.common.email.exception.*;
 
 /**
  * Processes XML message to extract e-mail message and sends message using
@@ -72,11 +74,19 @@ public class EmailConsumerSpring implements Processor {
     
     /** The mail server hostname/IP to use */
     private String mailUrl = null;
+
     
     /** The log4j.properties file used by the Spring application */
     private String log4jPropertyFile;
-    
-    
+
+    private String smtpHost = null;
+
+    private String smtpPort = null;
+
+    private String mailUsername = null;
+
+    private String mailPassword = null;
+
     /**
      * Default constructor, required by Spring
      */
@@ -109,8 +119,155 @@ public class EmailConsumerSpring implements Processor {
     public void process(Exchange e) {
         // get the XML message from the exchange
         String body = e.getIn().getBody(String.class);
-        LOG.info("Processing Message");
+        LOG.debug("Processing Message: " + body);
 
+        if (isSimpleEmailMessage(body))
+        {
+            handleSimpleEmailMessage(body);
+        } else
+        {
+            handleXmlEmailMessage(body);
+        }
+
+    }
+
+    private boolean isSimpleEmailMessage(final String body)
+    {
+        try
+        {
+            JSONObject json = new JSONObject(body);
+            LOG.debug("Message is JSON");
+            return true;
+        } catch (JSONException je)
+        {
+            LOG.debug("Message not JSON");
+        }
+
+        return false;
+    }
+
+    private String validateRecipients(String recipients){
+    	Pattern pattern = Pattern.compile("^[_A-Za-z0-9-]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$");
+    	LOG.debug("Validating receipients: " + recipients);
+    	StringBuffer validated = new StringBuffer();
+    	String [] addresses = recipients.split(",");
+    	for(int i=0; i<addresses.length; i++){
+    		String email = addresses[i].trim();
+    		if(pattern.matcher(email).find()){
+    			if(validated.length() != 0){
+    				validated.append(",");
+    			}
+    			validated.append(email);
+    		}else{
+    			LOG.debug("Removing invalid address: " + addresses[i]);
+    		}
+    	}
+    	return validated.toString();
+    }
+
+    private Session createSession(String from)
+    {
+        Properties props = new Properties();
+        props.put(EmailConstants.MAIL_FROM_PROP, from);
+
+        props.put(EmailConstants.MAIL_STARTTLS, true);
+        props.put(EmailConstants.MAIL_HOST_PROP, smtpHost);
+        props.put(EmailConstants.MAIL_PORT_PROP, smtpPort);
+        props.put(EmailConstants.MAIL_AUTH_KEY, true);
+//        props.put(EmailConstants.MAIL_USER_KEY, mailUsername);
+//        props.put(EmailConstants.MAIL_PASSWD_KEY, mailPassword);
+
+
+        Session session = Session.getDefaultInstance(props,
+                new javax.mail.Authenticator() {
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(mailUsername,mailPassword);
+                    }
+                });
+
+
+        return session;
+    }
+
+    private MimeMessage createMimeMessage(Session session)
+    {
+        return new MimeMessage(session);
+    }
+
+    private MimeMessage createMimeMessage(Session session, String to, String subject)
+            throws MessagingException
+    {
+        MimeMessage msg = createMimeMessage(session);
+        msg.setFrom();
+
+        msg.setRecipients(Message.RecipientType.TO,
+                validateRecipients(to));
+
+        msg.setSubject(subject);
+
+        return msg;
+    }
+
+    private MimeMessage createMimeMessage(String from, String to, final String subject)
+            throws MessagingException
+    {
+        return createMimeMessage(createSession(from), to, subject);
+    }
+
+    private MimeMessage setTextMessageBody(MimeMessage msg, final String body)
+            throws MessagingException
+    {
+        if (body.contains("<html>"))
+        {
+            msg.setText(body, "utf-8", "html");
+        } else
+        {
+            msg.setText(body);
+        }
+
+
+        return msg;
+    }
+
+    private void sendMessage(Session session, MimeMessage msg) throws MessagingException
+    {
+        Transport transport = session.getTransport("smtps");
+        transport.connect(smtpHost, mailUsername, mailPassword);
+        LOG.debug("Transport: "+transport.toString());
+        transport.sendMessage(msg, msg.getAllRecipients());
+
+        Transport.send(msg);
+    }
+
+    private void handleSimpleEmailMessage(String message)
+    {
+        try
+        {
+            JsonEmail je = JsonEmail.fromJSONString(message);
+            final String to = je.getTo().trim();
+            final String from = je.getFrom().trim();
+            final String subject = je.getSubject().trim();
+            final String body = je.getBody();
+
+            Session session = createSession(from);
+            MimeMessage msg = createMimeMessage(session, to, subject);
+            msg = setTextMessageBody(msg, body);
+
+            sendMessage(session, msg);
+            LOG.debug("Message sent");
+        } catch (JsonEmailException jee)
+        {
+            LOG.error("Caught JsonEmailException");
+            jee.printStackTrace();
+        } catch (MessagingException me)
+        {
+            LOG.error("Caught MessageException: " + me.getMessage(), me);
+//            me.printStackTrace();
+        }
+    }
+
+    private void handleXmlEmailMessage(String body)
+    {
         // put the body into a string reader class
         java.io.StringReader sr = new java.io.StringReader(body);
 
@@ -121,23 +278,17 @@ public class EmailConsumerSpring implements Processor {
             email = email_t.getValue();
 
             //Build MimeMessage from email object
-            Properties props = new Properties();
-            props.put("mail.smtp.host", mailUrl);
-            props.put("mail.from", email.getHeader().getFrom());
-            Session session = Session.getInstance(props, null);
+            Session session = createSession(email.getHeader().getFrom());
             try {
                 //Add e-mail header
-                MimeMessage msg = new MimeMessage(session);
-                msg.setFrom();
-                msg.setRecipients(Message.RecipientType.TO,
-                        //email.getHeader().getTo());
-                		validateRecipients(email.getHeader().getTo()));
+
+                MimeMessage msg = createMimeMessage(session, email.getHeader().getTo(), email.getHeader().getSubject());
+
+                // add CC recipients
                 if (email.getHeader().getCc() != null) {
-                    //msg.addRecipients(Message.RecipientType.CC, email.getHeader().getCc());
-                	msg.addRecipients(Message.RecipientType.CC, 
-                			validateRecipients(email.getHeader().getCc()));
+                    msg.addRecipients(Message.RecipientType.CC,
+                            validateRecipients(email.getHeader().getCc()));
                 }
-                msg.setSubject(email.getHeader().getSubject());
 
                 //Create and add the e-mail body
                 //If no images are included just add body text
@@ -165,7 +316,7 @@ public class EmailConsumerSpring implements Processor {
                         multipartbody = new MimeMultipart("related");
                         imageBodyPart.setHeader("Content-ID", "<embedded_image>");
                     } else {
-                        //Attach imabe
+                        //Attach image
                         multipartbody = new MimeMultipart();
                         imageBodyPart.setFileName("image.jpg");
                     }
@@ -203,7 +354,6 @@ public class EmailConsumerSpring implements Processor {
                 //Send the message
                 Transport.send(msg);
                 LOG.info("Message sent to:" + email.getHeader().getTo());
-
             } catch (MessagingException mex) {
                 System.out.println("send failed, exception: " + mex);
             }
@@ -212,26 +362,6 @@ public class EmailConsumerSpring implements Processor {
                     + "exception processing XML: "
                     + ex.getMessage(),ex);
         }
-    }
-
-    private String validateRecipients(String recipients){
-    	Pattern pattern = Pattern.compile("^[_A-Za-z0-9-]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$");
-    	System.out.println("Validating receipients: " + recipients);
-    	StringBuffer validated = new StringBuffer();
-    	String [] addresses = recipients.split(",");
-    	for(int i=0; i<addresses.length; i++){
-    		String email = addresses[i].trim();
-    		if(pattern.matcher(email).find()){
-    			if(validated.length() != 0){
-    				validated.append(",");
-    			}
-    			validated.append(email);
-    		}else{
-    			//System.out.println("Removing invalid address: " + addresses[i]);
-    			LOG.info("Removing invalid address: " + addresses[i]);
-    		}
-    	}
-    	return validated.toString();
     }
 
     
@@ -253,4 +383,36 @@ public class EmailConsumerSpring implements Processor {
 	public void setLog4jPropertyFile(String log4jPropertyFile) {
 		this.log4jPropertyFile = log4jPropertyFile;
 	}
+
+    public String getSmtpHost() {
+        return smtpHost;
+    }
+
+    public void setSmtpHost(String smtpHost) {
+        this.smtpHost = smtpHost;
+    }
+
+    public String getSmtpPort() {
+        return smtpPort;
+    }
+
+    public void setSmtpPort(String smtpPort) {
+        this.smtpPort = smtpPort;
+    }
+
+    public String getMailUsername() {
+        return mailUsername;
+    }
+
+    public void setMailUsername(String mailUsername) {
+        this.mailUsername = mailUsername;
+    }
+
+    public String getMailPassword() {
+        return mailPassword;
+    }
+
+    public void setMailPassword(String mailPassword) {
+        this.mailPassword = mailPassword;
+    }
 }
