@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?><wfs:FeatureCollection xsi:schemaLocation="http://mapserver.nics.ll.mit.edu/NICS http://nics-ca-incident-mapserver1.nics.ll.mit.edu:8080/geoserver/nics/wfs?service=WFS&amp;version=1.0.0&amp;request=DescribeFeatureType&amp;typeName=NICS%3Aca_corona http://www.opengis.net/wfs  http://nics-ca-incident-mapserver1.nics.ll.mit.edu:8080/geoserver/schemas/wfs/1.0.0/WFS-basic.xsd" xmlns:gml="http://www.opengis.net/gml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:NICS="http://mapserver.nics.ll.mit.edu/NICS" xmlns:wfs="http://www.opengis.net/wfs"><gml:featureMember>
 <!--
 
-    Copyright (c) 2008-2015, Massachusetts Institute of Technology (MIT)
+    Copyright (c) 2008-2016, Massachusetts Institute of Technology (MIT)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
