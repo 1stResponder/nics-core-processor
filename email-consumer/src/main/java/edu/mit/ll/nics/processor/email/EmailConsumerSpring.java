@@ -219,7 +219,8 @@ public class EmailConsumerSpring implements Processor {
     {
         if (body.contains("<html>"))
         {
-            msg.setText(body, "utf-8", "html");
+//            msg.setText(body, "utf-8", "text/html");
+            msg.setContent(body, "text/html; charset=utf-8");
         } else
         {
             msg.setText(body);
@@ -234,7 +235,8 @@ public class EmailConsumerSpring implements Processor {
         Transport transport = session.getTransport("smtps");
         transport.connect(smtpHost, mailUsername, mailPassword);
         LOG.debug("Transport: "+transport.toString());
-        transport.sendMessage(msg, msg.getAllRecipients());
+        // TODO this is cause of duplicate emails, is this call more stable than Transport.send(msg)?
+//        transport.sendMessage(msg, msg.getAllRecipients());
 
         Transport.send(msg);
     }

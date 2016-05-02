@@ -87,7 +87,7 @@
 		<property name="gml_version" value="${gml.version}" />
 		<property name="crs" value="${crs}" />
 		<property name="db_reset_interval" value="${db.reset_interval}" />
-		<property name="dateFormatPattern" value="${dateFormatPattern}" />
+<!-- 		<property name="dateFormatPattern" value="${dateFormatPattern}" /> -->
 		<property name="timestampPropertyName" value="${timestampPropertyName}" />
 		<property name="log4jPropertyFile" value="${log4jPropertyFile}" />
 	</bean>

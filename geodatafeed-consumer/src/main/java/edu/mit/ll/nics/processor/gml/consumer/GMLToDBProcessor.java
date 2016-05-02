@@ -41,6 +41,8 @@ import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 import org.geotools.GML;
 import org.geotools.GML.Version;
@@ -51,8 +53,10 @@ import org.geotools.data.DataStore;
 import org.geotools.data.DataStoreFinder;
 import org.geotools.data.DefaultTransaction;
 import org.geotools.data.Transaction;
+import org.opengis.feature.IllegalAttributeException;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
+import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.filter.Filter;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.NoSuchAuthorityCodeException;
@@ -61,6 +65,7 @@ import org.opengis.referencing.operation.MathTransform;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.referencing.CRS;
 import org.geotools.util.logging.Logging;
+import org.geotools.feature.type.Types;
 import org.geotools.filter.text.cql2.CQL;
 
 import com.vividsolutions.jts.geom.Coordinate;
@@ -71,7 +76,7 @@ import java.io.*;
 
 public class GMLToDBProcessor implements Processor {
 
-    /**
+	/**
      * The logger.
      */
     private static final Logger log = Logger.getLogger(GMLToDBProcessor.class.getSimpleName());
@@ -121,9 +126,12 @@ public class GMLToDBProcessor implements Processor {
 	
 	/**
 	 * The SimpleDateFormat pattern expected from the timestamp field
-	 * Default: yyyy-MM-dd'T'HH:mm:ss'Z'
+	 * Default: yyyy-MM-dd'T'HH:mm:ssXXX
 	 */
-	private String dateFormatPattern = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+	private String dateFormatPatternOp0 = "yyyy-MM-dd'T'HH:mm:ss";
+	private String dateFormatPatternOp1 = "yyyy-MM-dd'T'HH:mm:ssX";
+	private String dateFormatPatternOp2 = "yyyy-MM-dd'T'HH:mm:ssXX";
+	private String dateFormatPatternOp3 = "yyyy-MM-dd'T'HH:mm:ssXXX";
 	
 	
     private String log4jPropertyFile;
@@ -183,8 +191,14 @@ public class GMLToDBProcessor implements Processor {
     
     /** Number of messages that have had a handled exception, used for debugging */
     private static int num_msg_h_ex = 0;
+    
+    /** Time threshold to throw away incoming features if they are older than*/
+    private static long old_feature_threshold = 12 * 3600 * 1000;
+    
+    /** Time threshold to throw away incoming features if they are newer than (i.e. in the future)*/
+    private static long new_feature_threshold = 12 * 3600 * 1000;
 
-     /**
+    /**
      * Public constructor
      */
     public GMLToDBProcessor() {
@@ -228,8 +242,8 @@ public class GMLToDBProcessor implements Processor {
     		}
     		
     		try {
-    			datastore = DataStoreFinder.getDataStore(db_params); // Throws IOException?    			
-    		} catch (Exception dse) {
+    			datastore = DataStoreFinder.getDataStore(db_params);	
+    		} catch (IOException dse) {
     			log.error("Unhandled Exception ("+dse.getMessage()+") getting datastore with db_params: " 
     					+ db_params.toString(), dse);
     		}
@@ -287,7 +301,6 @@ public class GMLToDBProcessor implements Processor {
     		success = false;
     	}
     	
-    	// TODO: If fails, exit the application?
     	try {
     		// Set the CRS
 			tablecrs = CRS.decode(crs);
@@ -296,14 +309,17 @@ public class GMLToDBProcessor implements Processor {
 		} catch (NoSuchAuthorityCodeException e) {
 			log.error("NoSuchAuthorityException while setting CoordinateReferenceSystem to: '" + crs + 
 					"': " + e.getMessage(), e);
+			System.exit(1);
 			
 		} catch (FactoryException e) {
 			log.error("FactoryException while setting CoordinateReferenceSystem to: '" + crs + 
 					"': " + e.getMessage(), e);
+			System.exit(1);
 			
 		} catch (Exception e) {
 			log.error("Caught unhandled exception while setting CoordinateReferenceSystem to: '" + crs + 
 					"': " + e.getMessage(), e);
+			System.exit(1);
 		}
     	
     	// Initialize the GML object to the specified version
@@ -376,7 +392,7 @@ public class GMLToDBProcessor implements Processor {
     	SimpleFeatureStore featStore = null;
     	
     	String id = null;
-    	int count = 0;
+    	int count;
     	Filter filter = null;
     	
         // get the GML message from the exchange
@@ -384,95 +400,127 @@ public class GMLToDBProcessor implements Processor {
     	String gml_str = exchange.getIn().getBody(String.class);
         //log.info("Processing Message In : " + gml_str);
     	
+    	// Test for the coordinates being ',' here...
+    	if(gml_str.contains(gml_coord_comma)) {
+    		log.info("Dropping message:\n"
+    				+ gml_str + "\n\nRejecting above message due to invalid coordinates");
+    		return;
+    	}
+    	
         try {
         	if (stopwatch.getTime() > datastore_reset_interval) {
         		stopwatch.stop();
         		reset_datastore();
         	}
         	
-        	// Check the contents of the coordinates field
-        	// if it's just a comma throw an exception
-        	if (gml_str.contains(gml_coord_comma))
-        		throw new InvalidCoordinates();
-        	
+        	// Bad coordinates bomb here, so checks later don't help, at least not for the ',' kind - jp
         	featcollection = gml.decodeFeatureCollection(in);
         	//log.info("GML parsed");
-        	final SimpleFeatureType schema_new = featcollection.getSchema();
-        	final String postgisTableName = schema_new.getName().getLocalPart();
 
         	iterator = featcollection.features();
-
             SimpleFeature feat = iterator.next();
+            
+            // The below check of the attributes may be unnecessary? When it's decoded, it runs
+            // into syntax issues and dies, dropping the track. However, there may be parseable values
+            // that make it here, then other issues the validation below susses out. Except not sure if
+            // the decoding does validation at the same time already, though? - jp
+            
+            //ERROR CHECK - Use geotools validation
+            for (AttributeDescriptor property : feat.getType().getAttributeDescriptors() ) {
+          	   Object value = feat.getAttribute( property.getName() );
+          	   try {
+          		   Types.validate( property, value);
+          	   } catch (IllegalAttributeException ex) {
+          		   throw new GdfcException("Failed geotools validation", ex);
+          	   }
+          	}
+              
+            //ERROR CHECK - 1 FEATURE
+          	if (iterator.hasNext()) {
+          		throw new GdfcException("More than one feature in incoming GML");
+          	}
+            
+            //ERROR CHECK - ID
             try {
             	id = feat.getAttribute(id_table_entry).toString();
-            } catch (NullPointerException ex2) {
-            	log.info("NullPointerException getting 'id_table_entry' attribute from feature: " + id_table_entry);
+            } catch (NullPointerException ex) {
+            	throw new GdfcException("NullPointerException getting " + id_table_entry + " attribute from feature", ex);
             }
-        	Point point =  (Point) feat.getDefaultGeometry();
-        	
-        	
-        	if ( point.getCoordinate().equals(new Coordinate(0,0)))	{
-        		throw new Exception("Coordinates = 0,0");
+            
+        	//ERROR CHECK - TIMESTAMP
+        	// Don't persist a track with an invalid or old time
+            Timestamp tsNew = getTimestampFromFeature(feat);
+        	if(tsNew == null) {
+        		throw new GdfcException("Unparseable timestamp, dropping track");
         	}
         	
+        	long currentTimeMillis = System.currentTimeMillis();
+        	
+        	if (tsNew.before(new Timestamp(currentTimeMillis - old_feature_threshold))) { //if it's older than threshold
+        		throw new GdfcException("Timestamp is old and being ignored");
+        	}
+        	
+        	if (tsNew.after(new Timestamp(currentTimeMillis + new_feature_threshold))) { //if it's "newer" than threshold
+        		throw new GdfcException("Timestamp is too far in the future and being ignored");
+        	}
+        	
+        	
+        	//ERROR CHECK - COORDINATES
+        	Point point =  (Point) feat.getDefaultGeometry();
+        	if ( !Pattern.matches( "(\\(-?\\d+(\\.\\d+)?,\\s?-?\\d+(\\.\\d+)?(,\\s?-?\\d+(\\.\\d+)?|(,\\s?NaN))?\\))", 
+        			point.getCoordinate().toString() ) ) {
+        		throw new GdfcException("failed coordinate regex check on: " + point.getCoordinate().toString());
+        	}
+        	if ( point.getCoordinate().equals(new Coordinate(0,0)))	{
+        		throw new GdfcException("Coordinates 0,0 in GML");
+        	}
+        	
+        	//ERROR CHECK - COORDINATE REFERENCE SYSTEM
         	String feat_crs_wkt = point.getUserData().toString();
         	CoordinateReferenceSystem pointcrs = CRS.parseWKT(feat_crs_wkt);
-        	
         	if(pointcrs == null) {
-        		log.error("\n!!! pointcrs is null! tablecrs is:'"+tablecrs+"' !!!\n");
+        		throw new GdfcException("pointcrs is null");
         	}
         	
+        	//transform coordinates to our preferred CRS
         	MathTransform transform = CRS.findMathTransform(pointcrs, tablecrs, false);
         	point = (Point) JTS.transform(point, transform);
         	point.setUserData(null);
         	feat.setDefaultGeometry(point);
-        	        	
-        	if (iterator.hasNext()) {
-        		log.error("more than 1 feature in GML, id: " + id);
-        	}
-        	      	
-        	// Get incoming track's timestamp
-        	Timestamp tsNew = getTimestampFromFeatureCollection(featcollection);
-        	     	
-        	// Don't persist a track with an invalid time
-        	if(tsNew == null) {
-        		log.warn("Unparseable timestamp, dropping track");
-        		return;
-        	}
+        	   	
         	
+        	//THIS FEATURE ISNT USED, DISABLE FOR NOW
         	// Log the track to the current table's log table
-        	logTrack(postgisTableName + "_log", featcollection);
+        	//logTrack(postgisTableName + "_log", featcollection);
         	
+
         	//connect to feature store
+        	final SimpleFeatureType schema_new = featcollection.getSchema();
+        	final String postgisTableName = schema_new.getName().getLocalPart();
         	//featuresource is read only, cast as featurestore for write/modify
         	featStore = (SimpleFeatureStore) datastore.getFeatureSource(postgisTableName); 
         	//log.info("connected to postgis table: " + postgisTableName);
         	
-        	//look for feature in table if id is not null
-        	if (id != null) {
-	        	filter = CQL.toFilter(id_table_entry + " = '" + id + "'");
-	            getfeatures = featStore.getFeatures(filter);
-	            count = getfeatures.size();
-        	}
+        	//look for feature in table
+        	filter = CQL.toFilter(id_table_entry + " = '" + id + "'");
+            getfeatures = featStore.getFeatures(filter);
+            count = getfeatures.size();
         	
-        	//int count = 0;
             switch (count) { 	
 	            case 0: 	//if no feature exists then create feature for postgis database
 	            	//log.info("adding feature: " + id + " to db: " + postgisTableName);
 	            	
 	            	//add feature to database
-	            	
 	            	Transaction addTransaction = new DefaultTransaction("add");
 	                featStore.setTransaction(addTransaction);
 	                try {
 	                	featStore.addFeatures(featcollection);
 	                    addTransaction.commit();
 	                } catch (Exception ex) {
-	                    log.error("Exception adding features: " + ex.getMessage(), ex);
-	                    addTransaction.rollback();
+	                	addTransaction.rollback();
+	                	throw new GdfcException("Exception adding features: " + ex.getMessage(), ex);
 	                } finally {
 	                    addTransaction.close();
-	                    //log.info("transaction closed");
 	                }
 	            	
 	            	//log.info("added feature: " + id + " to table: " + postgisTableName);
@@ -482,28 +530,14 @@ public class GMLToDBProcessor implements Processor {
 	            	
 	            	//log.info("found feature id: " + id + " in db: " + postgisTableName);
 
-	            	Timestamp tsCurrent = null;
-	            		            	
 	            	// Get existing track's timestamp
-	            	tsCurrent = getTimestampFromFeatureCollection(getfeatures);
-	            	  
-	            	// TODO:NEW moved up for validation
-	            	// Get incoming track's timestamp
-	            	//tsNew = getTimestampFromFeatureCollection(featcollection);
+	            	Timestamp tsCurrent = getTimestampFromFeatureCollection(getfeatures);
 	            	
-	            	if(tsNew != null && tsCurrent != null) {
-	            			
-	            		if(tsNew.before(tsCurrent)) {
-	            			log.info("\n\nNEW time is older than CURRENT time, not persisting track\n\n");
-	            			return;
-	            		}
-	            		
-	            	} else {
-	            		
-	            		// can't compare times, so just letting it through
-	            		log.info("\n\n=========\nAt least one of the times was null, so can't compare:\n" +
-	            				"curtime: " + tsCurrent + "\nnewtime: " + tsNew + "\n=========\n");
-	            	}
+	            	if(tsCurrent == null) {
+	            		throw new GdfcException("A feature exists in the DB with a null timestamp");
+	            	}else if(tsNew.before(tsCurrent)) {
+            			throw new GdfcException("A feature exists in the DB with a newer timestamp");
+            		}
 	            	
 	            	Transaction removeAddTransaction = new DefaultTransaction("remove_add");
 	                featStore.setTransaction(removeAddTransaction);
@@ -512,11 +546,10 @@ public class GMLToDBProcessor implements Processor {
 	                	featStore.addFeatures(featcollection);
 	                    removeAddTransaction.commit();
 	                } catch (Exception ex) {
-	                    log.error("Exception during remove_add transaction: " + ex.getMessage(), ex);
-	                    removeAddTransaction.rollback();
+	                	removeAddTransaction.rollback();
+	                	throw new GdfcException("Exception during remove_add transaction: " + ex.getMessage(), ex);
 	                } finally {
 	                    removeAddTransaction.close();
-	                    //log.info("t2 closed");
 	                }
 
 	            	//log.info("modified feature: " + id + " in table: " + postgisTableName);
@@ -524,7 +557,7 @@ public class GMLToDBProcessor implements Processor {
 	            	break;
 	            	
 	            default:
-	            	log.error("more than 1 feature with that name in db, id: " + id);
+	            	throw new GdfcException("More than one feature with same " + id_table_entry + " in DB, " + id_table_entry + " : " + id);
             }
             
             if (!postgisTableName.equals(last_table)) {
@@ -532,37 +565,40 @@ public class GMLToDBProcessor implements Processor {
             	log.info("current data source: " + postgisTableName);
             }
             
-        } catch (InvalidCoordinates ex) {
-        	log.info("Caught invalid coordinates exception in gml: " + gml_str + " exception: " + ex);
+        } catch (GdfcException ex) {
+        	log.warn("Caught expected exception processing gml: " + gml_str + " exception: " + ex.getMessage());
             num_msg_h_ex++;
             
         } catch (Exception ex) {
-        	
-            log.error("Caught following exception processing gml: " + gml_str + " exception: " + ex);
+            log.error("Caught UNEXPECTED exception processing gml: " + gml_str + " exception: " + ex, ex);
             num_msg_ex++;
+            
         } finally {
         	try {
         		if (num_msg_started % 1000 == 0)	{
         			log.info("number of messages started: " + num_msg_started + "   number of messages with a handled exception: " + num_msg_h_ex + "   number of messages with an unhandled exception: " + num_msg_ex);
         		}
         		
-        		if (iterator != null)	{
-            		iterator.close();
-            		//log.info("iterator was closed");
-        		}
-        			
-        		in.close();
         		featStore = null;
         		featcollection = null;
         		getfeatures = null;
-        	} catch (Exception ex) {
-        		log.error("could not close GML inputstream or feature iterator");
+        		
+        		if(iterator != null) {
+        			iterator.close();
+        		}
+        		
+        		in.close();
+        		
+        	} catch (IOException ex) {
+        		log.error("could not close GML inputstream");
+        		num_msg_ex++;
         	}
         }
     }
             
-    
-    /**
+
+
+	/**
      * Logs the features to a log table, created by appending "_log" to the postgisTableName
      * 
      * @param logTableName The name of the log table to log to
@@ -614,36 +650,41 @@ public class GMLToDBProcessor implements Processor {
      * 
      * @return A SQL Timestamp object set to the specified time if successful in parsing,
      * 		   null otherwise
+     * @throws GdfcException 
      */
-    private Timestamp getTimestampFromFeatureString(String strTime) {
+    private Timestamp getTimestampFromFeatureString(String strTime) throws GdfcException {
     	Timestamp ts = null;
     	java.util.Date date = null;
     	SimpleDateFormat sdf = null;
+    	String dateFormatPattern = null;
     	
     	// Expected format... but should be forgiving if this doesn't work
-    	
-		try {
-			log.debug("Using this dateFormatPattern: " + dateFormatPattern);
-			sdf = new SimpleDateFormat(dateFormatPattern, Locale.US); // TODO:NEW make locale configurable
-			date = sdf.parse(strTime);
-			ts = new Timestamp(date.getTime());
-		} catch (ParseException e) {
-			log.error("Exception parsing incoming timestamp("+strTime+"): " + e.getMessage());			
-		}
-    	
-		// If above method didn't work, then try deprecated method below
-		if(ts == null) {
-			log.info("Apparently received an unexpected time format, trying alternate method...");
-			try {
-				// try more forgiving method of getting timestamp
-				// TODO: switch to more forgiving method that's not deprecated
-				ts = new Timestamp(java.util.Date.parse(strTime));
-				log.info("With alternate method got: " + ts);
-			} catch(Exception e) {
-				log.error("Exception trying to Date.parse input string("+strTime+"): " + e.getMessage());
-			}
-		}
-    	
+    	// yyyy-MM-dd'T'HH:mm:ssX   yyyy-MM-dd'T'HH:mm:ssXX   yyyy-MM-dd'T'HH:mm:ssXXX
+    	// can be any iso8601 option:  Z, -08; -0800; -08:00
+    	// ASSUME no Z or timezone info means zulu time, maybe risky
+
+    	if (strTime.length() == 19) {
+    		dateFormatPattern = dateFormatPatternOp0;
+    	} else if (strTime.length() <= 22) {
+    		dateFormatPattern = dateFormatPatternOp1;
+    	} else if (strTime.length() == 24) {
+    		dateFormatPattern = dateFormatPatternOp2;
+    	} else if (strTime.length() == 25) {
+    		dateFormatPattern = dateFormatPatternOp3;
+    	} else {
+    		throw new GdfcException("timestamp did not fit any of the expected formats" + strTime);
+    	}
+
+    	try {
+    		log.debug("Using this dateFormatPattern: " + dateFormatPattern);
+    		sdf = new SimpleDateFormat(dateFormatPattern, Locale.US); // TODO:NEW make locale configurable
+    		date = sdf.parse(strTime);
+    		ts = new Timestamp(date.getTime());
+    	} catch (ParseException e) {
+    		throw new GdfcException("Exception parsing incoming timestamp("+strTime+"): " + e);			
+    	}
+
+
     	return ts;
     }
     
@@ -655,15 +696,31 @@ public class GMLToDBProcessor implements Processor {
      * 		  there is only one feature in each collection
      * 
      * @return An initialized Timestamp object if successful, null otherwise
+     * @throws GdfcException 
      */
-    private Timestamp getTimestampFromFeatureCollection(SimpleFeatureCollection features) {
-    	Timestamp ts = null;
-    	Object objTime = null;
-    	org.opengis.feature.Property propTime = null;
-    	
+    private Timestamp getTimestampFromFeatureCollection(SimpleFeatureCollection features) throws GdfcException {
     	final SimpleFeatureIterator iter = features.features();
     	SimpleFeature feature = iter.next(); // Only looking at first/only feature
     	iter.close();
+    	
+    	Timestamp ts = getTimestampFromFeature(feature);
+    			
+		//log.debug("getTimestampFromFeatureCollection: returning: " + ts);
+    	return ts;
+    }
+    
+    /**
+     * Attempts to extract the "timestamp" property out of the feature
+     * 
+     * @param feature assumed to contain a "timestamp" property
+     * 
+     * @return An initialized Timestamp object if successful, null otherwise
+     * @throws GdfcException 
+     */
+    private Timestamp getTimestampFromFeature(SimpleFeature feature) throws GdfcException {
+    	Timestamp ts = null;
+    	Object objTime = null;
+    	org.opengis.feature.Property propTime = null;
     	
 		if(feature != null) {
 			propTime = feature.getProperty(timestampPropertyName);
@@ -672,10 +729,10 @@ public class GMLToDBProcessor implements Processor {
 		if(propTime != null) {			
 			objTime = propTime.getValue();
 			if(objTime instanceof java.lang.String){
-				log.info("Got a String...");
+				//log.info("Got a String...");
 				ts = getTimestampFromFeatureString((String)objTime);
 			} else if(objTime instanceof java.sql.Timestamp) {
-				log.info("Got a Timestamp...");
+				//log.info("Got a Timestamp...");
 				ts = (Timestamp) objTime;
 			}
 		} else {
@@ -683,15 +740,18 @@ public class GMLToDBProcessor implements Processor {
 					"the name of the element in the GML containing the timestamp!");
 		}
     			
-		log.debug("getTimestampFromFeatureCollection: returning: " + ts);
+		//log.debug("getTimestampFromFeature: returning: " + ts);
     	return ts;
     }
     
     
-    private class InvalidCoordinates extends Exception {
-	    private static final String message = "Invalid coordinates field of GML";
-    	public InvalidCoordinates() {
+    private class GdfcException extends Exception {
+		private static final long serialVersionUID = 7049430620036975247L;
+		public GdfcException(String message) {
 	        super(message);
+	    }
+		public GdfcException(String message, Throwable ex) {
+	        super(message, ex);
 	    }
 	}
     
@@ -793,7 +853,7 @@ public class GMLToDBProcessor implements Processor {
 	public void setTimestampPropertyName(String timestampPropertyName) {
 		this.timestampPropertyName = timestampPropertyName;
 	}
-
+/** TODO: delete once done testing/building
 	public String getDateFormatPattern() {
 		return dateFormatPattern;
 	}
@@ -801,7 +861,7 @@ public class GMLToDBProcessor implements Processor {
 	public void setDateFormatPattern(String dateFormatPattern) {
 		this.dateFormatPattern = dateFormatPattern;
 	}
-
+**/
 	public final String getLog4jPropertyFile() {
         return log4jPropertyFile;
     }
