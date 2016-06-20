@@ -146,8 +146,52 @@ public class EmailConsumerSpring implements Processor {
         return false;
     }
 
+    private boolean testJsonArray(String val)
+    {
+        try
+        {
+            if (val.startsWith("[")) {
+                JSONArray arr = new JSONArray(val);
+            }
+
+            return true;
+        } catch (JSONException je)
+        {
+            return false;
+        }
+    }
+
+    private String getRecipientsFromJson(String val)
+    {
+        StringBuffer ret = new StringBuffer();
+        try
+        {
+            if (val.startsWith("["))
+            {
+                JSONArray arr = new JSONArray(val);
+                LOG.debug("Emails in array: " + arr.length());
+                for (int i=0; i < arr.length(); i++)
+                {
+                    String email = arr.getString(i);
+                    LOG.debug("Extracting email from JSONArray: " + email);
+
+                    if (ret.length() != 0)
+                        ret.append(",");
+                    ret.append(email);
+                }
+            }
+        } catch (JSONException je)
+        {
+
+        }
+
+        return ret.toString();
+    }
+
     private String validateRecipients(String recipients){
-    	Pattern pattern = Pattern.compile("^[_A-Za-z0-9-]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$");
+    	if (testJsonArray(recipients))
+            recipients = getRecipientsFromJson(recipients);
+        Pattern pattern = Pattern.compile("^[_A-Za-z0-9-]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$");
     	LOG.debug("Validating receipients: " + recipients);
     	StringBuffer validated = new StringBuffer();
     	String [] addresses = recipients.split(",");
@@ -198,7 +242,7 @@ public class EmailConsumerSpring implements Processor {
             throws MessagingException
     {
         MimeMessage msg = createMimeMessage(session);
-        msg.setFrom();
+//        msg.setFrom();
 
         msg.setRecipients(Message.RecipientType.TO,
                 validateRecipients(to));
@@ -233,12 +277,12 @@ public class EmailConsumerSpring implements Processor {
     private void sendMessage(Session session, MimeMessage msg) throws MessagingException
     {
         Transport transport = session.getTransport("smtps");
+//        transport.connect(smtpHost, Integer.valueOf(smtpPort), mailUsername, mailPassword);
         transport.connect(smtpHost, mailUsername, mailPassword);
         LOG.debug("Transport: "+transport.toString());
-        // TODO this is cause of duplicate emails, is this call more stable than Transport.send(msg)?
-//        transport.sendMessage(msg, msg.getAllRecipients());
+        transport.sendMessage(msg, msg.getAllRecipients());
 
-        Transport.send(msg);
+//        Transport.send(msg); // cause of duplicates
     }
 
     private void handleSimpleEmailMessage(String message)
