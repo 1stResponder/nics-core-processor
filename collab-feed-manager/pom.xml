@@ -145,10 +145,12 @@
 		<dependency>
 			<groupId>edu.mit.ll.nics.common</groupId>
 			<artifactId>entities</artifactId>
+			<version>6.4-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.mit.ll.nics.common</groupId>
 			<artifactId>geoserver-rest-api</artifactId>
+			<version>6.4-SNAPSHOT</version>
 		</dependency>
 
 	</dependencies>

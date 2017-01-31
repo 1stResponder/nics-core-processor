@@ -31,6 +31,14 @@
 -->
 <beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
 
+	<bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer" >
+		<property name="searchSystemEnvironment" value="true" />
+		<property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_OVERRIDE" />
+		<property name="location">
+			<value>${NICS_CONFIG}/email-consumer.properties</value>
+		</property>
+	</bean>
+	
 	<bean id="log4jInitialization" class="org.springframework.beans.factory.config.MethodInvokingFactoryBean">
 		<property name="targetClass" value="org.springframework.util.Log4jConfigurer" />
 		<property name="targetMethod" value="initLogging" />
@@ -51,6 +59,7 @@
 	<!-- EmailConsumerSpring bean configuration --> 
 	<bean id="emailConsumer" class="edu.mit.ll.nics.processor.email.EmailConsumerSpring"
 		init-method="init">
+		<property name="transportProtocol" value="${mail.transport.protocol}" />
 		<property name="smtpHost" value="${mail.smtp.host}" />
 		<property name="smtpPort" value="${mail.smtp.port}" />
 		<property name="mailUsername" value="${mail.username}" />

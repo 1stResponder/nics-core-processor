@@ -105,6 +105,7 @@
 		<junit.version>4.10</junit.version>
 		<jxpath.version>1.2</jxpath.version>
 		<log4j.version>1.2.17</log4j.version>
+		<nics.common.version>6.4-SNAPSHOT</nics.common.version>
 		<plexus.version>1.5.9</plexus.version>
 		<postgis-jdbc.version>1.5.2</postgis-jdbc.version>
 		<postgresql.version>9.1-901.jdbc4</postgresql.version>
@@ -123,7 +124,7 @@
 
 		<!-- External plugin versions -->
 		<assembly.plugin.version>2.3</assembly.plugin.version>
-		<!--<buildnumber.plugin.version>1.1</buildnumber.plugin.version>-->
+		<buildnumber.plugin.version>1.1</buildnumber.plugin.version>
 		<compiler.plugin.version>2.5.1</compiler.plugin.version>
 		<dependency.plugin.version>2.5.1</dependency.plugin.version>
 		<ear.plugin.version>2.6</ear.plugin.version>
@@ -524,47 +525,47 @@
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>dao-lib</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>email-alert</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>encryption-lib</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>entities</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>geoserver-rest-api</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>messages</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>message-parser</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>rabbitmq-admin-interface</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>rabbitmq-client</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.springframework</groupId>
@@ -580,12 +581,12 @@
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>web-service-request-lib</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>edu.mit.ll.nics.common</groupId>
 				<artifactId>xml-email</artifactId>
-				<version>${project.version}</version>
+				<version>${nics.common.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>net.sourceforge.htmlunit</groupId>
@@ -663,6 +664,12 @@
 							<exclude>**/.git/**</exclude>
 							<exclude>**/*.log</exclude>
 							<exclude>**/*.txt</exclude>
+							<exclude>**/*.gml</exclude>
+							<exclude>**/*.versionsBackup</exclude>
+                            <exclude>**/*.md</exclude>
+                            <exclude>**/*.docx</exclude>
+                            <exclude>**/*.json</exclude>
+                            <exclude>**/*.92</exclude>
 
 							<!-- Project-specific excludes -->
 						</excludes>
@@ -897,16 +904,19 @@
 					so it is applied to all projects -->
 				<groupId>com.mycila.maven-license-plugin</groupId>
 				<artifactId>maven-license-plugin</artifactId>
+				<version>${license.plugin.version}</version>
 			</plugin>
 			<plugin>
 				<!-- Use the maven-compiler-plugin across the whole project -->
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
+				<version>${compiler.plugin.version}</version>
 			</plugin>
 			<plugin>
 				<!-- Generate the buildnumber in every module -->
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>buildnumber-maven-plugin</artifactId>
+				<version>${buildnumber.plugin.version}</version>
 			</plugin>
 		</plugins>
 	</build>

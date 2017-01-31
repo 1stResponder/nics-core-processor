@@ -53,6 +53,7 @@ public class CollabFeedGeoserver extends GeoServer {
     private String dataStoreName; //The datastore used to store NICS incident and room information (the SACORE database)
     public static int SRID = 3857;
     public static String SRS_STRING = "EPSG:3857";
+    private static final String GEOMETRY_NAME = "geometry";
     //Initialize the max extent of the projection {minx maxx miny maxy}
     //Layer extents are hard coded to the extents of the USA so the bounds don't need be repeatedly updated
     public Envelope maxExtent = new Envelope(-14084454.868, -6624200.909, 1593579.354, 6338790.069);
@@ -118,9 +119,10 @@ public class CollabFeedGeoserver extends GeoServer {
      */
     public boolean addCollabRoomView(String title, int roomId) {
     	String layerName = "R" + String.valueOf(roomId);
+        // featureid must not be camelcase here.
         if (this.addFeatureTypeSQL(workspaceName, dataStoreName, layerName, SRS_STRING, 
         		"SELECT f.* from Feature f, CollabroomFeature cf WHERE cf.featureid=f.featureid and cf.collabroomid=" + roomId + " and deleted='f'", 
-        		"the_geom", "Geometry", SRID)) {
+        		GEOMETRY_NAME, "Geometry", SRID)) {
             this.updateLayerStyle(layerName, workspaceName, "collabRoomStyle");
             this.updateFeatureTypeTitle(layerName, workspaceName, dataStoreName, title);
             this.updateFeatureTypeBounds(workspaceName, dataStoreName, layerName, maxExtent, maxExtentLatLon, SRS_STRING);
@@ -154,7 +156,7 @@ public class CollabFeedGeoserver extends GeoServer {
     {
     	final String query = "SELECT f.* from Feature f, UserFeature uf WHERE uf.featureid=f.featureid and uf.userid="+userId  + " and deleted='f'";
     	final String featName = userId + "_MyMap";
-    	if (this.addFeatureTypeSQL(workspaceName, dataStoreName, featName, SRS_STRING, query, "the_geom", "Geometry", SRID))
+    	if (this.addFeatureTypeSQL(workspaceName, dataStoreName, featName, SRS_STRING, query, GEOMETRY_NAME, "Geometry", SRID))
     	{
             this.updateLayerStyle(featName, workspaceName, "collabRoomStyle");
             this.updateFeatureTypeBounds(workspaceName, dataStoreName, featName, maxExtent, maxExtentLatLon, SRS_STRING);
