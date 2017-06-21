@@ -280,7 +280,7 @@ public class CollabFeedSync extends TimerTask implements Processor  {
             for (Incident incident : incidents)
             	dbList.add(incident.getIncidentname());
             
-            log.debug(dbList);
+            log.debug("dbList: " + dbList);
             
             //update list of geoserver layers
             geoserverList = geoserver.getFeatureTypeList();
@@ -289,7 +289,7 @@ public class CollabFeedSync extends TimerTask implements Processor  {
             	geoserverList = new ArrayList<String>();
             }
             
-            log.debug(geoserverList);
+            log.debug("geoList: " + geoserverList);
             
             //get list of KML layers
             File temp = new File(kmlFilepath);
@@ -305,15 +305,14 @@ public class CollabFeedSync extends TimerTask implements Processor  {
 	            	kmlList.add(file.getName().replaceAll(".kml", ""));
             }
             
-            log.debug("Existing KML files:");
-            log.debug(kmlList);
+            log.debug("Existing KML files:" + kmlList);
             //sync collabrooms and incidents
             syncRooms(collabRooms);
         	syncIncidents(incidents);
 
         } catch (Exception ex) {
         	ex.printStackTrace();
-            log.error("Error accessing DB " + ex);
+            log.error("Error accessing DB2 " + ex);
         } finally {
         	//make sure DB connection is closed
         	if (em.isOpen())
@@ -362,7 +361,7 @@ public class CollabFeedSync extends TimerTask implements Processor  {
 	        }
     	} catch (Exception ex) {
     		ex.printStackTrace();
-            log.error("Error accessing DB " + ex);
+            log.error("Error accessing DB1 " + ex);
         } finally {
         	//make sure DB connection is closed
             em.close();
